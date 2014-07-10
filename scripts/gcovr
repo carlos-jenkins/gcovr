@@ -50,11 +50,6 @@ from os.path import normpath
 
 medium_coverage = 75.0
 high_coverage = 90.0
-low_color = "LightPink"
-medium_color = "#FFFF55"
-high_color = "LightGreen"
-covered_color = "LightGreen"
-uncovered_color = "LightPink"
 
 __version__ = "3.3-prerelease"
 src_revision = "$Revision$"
@@ -864,23 +859,35 @@ def process_existing_gcov_file(filename, covdata, options):
             os.remove(filename)
 
 
-#
-# Produce the classic gcovr text report
-#
-def print_text_report(covdata, options):
+def sort_keys(covdata, options):
+
+    keys = list(covdata.keys())
+
     def _num_uncovered(key):
-        (total, covered, percent) = covdata[key].coverage()
+        total, covered, percent = covdata[key].coverage()
         return total - covered
 
     def _percent_uncovered(key):
-        (total, covered, percent) = covdata[key].coverage()
+        total, covered, percent = covdata[key].coverage()
         if covered:
             return -1.0 * covered / total
         else:
             return total or 1e6
 
-    def _alpha(key):
-        return key
+    if options.sort_uncovered:
+        keys.sort(key=_num_uncovered)
+    elif options.sort_percent:
+        keys.sort(key=_percent_uncovered)
+    else:
+        keys.sort()
+
+    return keys
+
+
+#
+# Produce the classic gcovr text report
+#
+def print_text_report(covdata, options):
 
     if options.output:
         OUTPUT = open(options.output, 'w')
@@ -903,11 +910,7 @@ def print_text_report(covdata, options):
     OUTPUT.write("-" * 78 + '\n')
 
     # Data
-    keys = list(covdata.keys())
-    keys.sort(
-        key=options.sort_uncovered and _num_uncovered or
-        options.sort_percent and _percent_uncovered or _alpha
-    )
+    keys = sort_keys(covdata.keys(), options)
     for key in keys:
         (t, n, txt) = covdata[key].summary()
         total_lines += t
@@ -968,410 +971,204 @@ def print_summary(covdata, options):
 #
 # CSS declarations for the HTML output
 #
-css = Template('''
-    body
-    {
-      color: #000000;
-      background-color: #FFFFFF;
-    }
+css = Template("""
 
-    /* Link formats: use maroon w/underlines */
-    a:link
-    {
-      color: navy;
-      text-decoration: underline;
-    }
-    a:visited
-    {
-      color: maroon;
-      text-decoration: underline;
-    }
-    a:active
-    {
-      color: navy;
-      text-decoration: underline;
-    }
-
-    /*** TD formats ***/
-    td
-    {
-      font-family: sans-serif;
-    }
-    td.title
-    {
-      text-align: center;
-      padding-bottom: 10px;
-      font-size: 20pt;
-      font-weight: bold;
-    }
-
-    /* TD Header Information */
-    td.headerName
-    {
-      text-align: right;
-      color: black;
-      padding-right: 6px;
-      font-weight: bold;
-      vertical-align: top;
-      white-space: nowrap;
-    }
-    td.headerValue
-    {
-      text-align: left;
-      color: blue;
-      font-weight: bold;
-      white-space: nowrap;
-    }
-    td.headerTableEntry
-    {
-      text-align: right;
-      color: black;
-      font-weight: bold;
-      white-space: nowrap;
-      padding-left: 12px;
-      padding-right: 4px;
-      background-color: LightBlue;
-    }
-    td.headerValueLeg
-    {
-      text-align: left;
-      color: black;
-      font-size: 80%;
-      white-space: nowrap;
-      padding-left: 10px;
-      padding-right: 10px;
-      padding-top: 2px;
-    }
-
-    /* Color of horizontal ruler */
-    td.hr
-    {
-      background-color: navy;
-      height:3px;
-    }
-    /* Footer format */
-    td.footer
-    {
-      text-align: center;
-      padding-top: 3px;
-      font-family: sans-serif;
-    }
-
-    /* Coverage Table */
-
-    td.coverTableHead
-    {
-      text-align: center;
-      color: white;
-      background-color: SteelBlue;
-      font-family: sans-serif;
-      font-size: 120%;
-      white-space: nowrap;
-      padding-left: 4px;
-      padding-right: 4px;
-    }
-    td.coverFile
-    {
-      text-align: left;
-      padding-left: 10px;
-      padding-right: 20px;
-      color: black;
-      background-color: LightBlue;
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 110%;
-    }
-    td.coverBar
-    {
-      padding-left: 10px;
-      padding-right: 10px;
-      background-color: LightBlue;
-    }
-    td.coverBarOutline
-    {
-      background-color: white;
-    }
-    td.coverValue
-    {
-      padding-top: 2px;
-      text-align: right;
-      padding-left: 10px;
-      padding-right: 10px;
-      font-family: sans-serif;
-      white-space: nowrap;
-      font-weight: bold;
-    }
-
-    /* Link Details */
-    a.detail:link
-    {
-      color: #B8D0FF;
-      font-size:80%;
-    }
-    a.detail:visited
-    {
-      color: #B8D0FF;
-      font-size:80%;
-    }
-    a.detail:active
-    {
-      color: #FFFFFF;
-      font-size:80%;
-    }
-
-    .graphcont{
-        color:#000;
-        font-weight:700;
-        float:left
-    }
-
-    .graph{
-        float:left;
-        background-color: white;
-        position:relative;
-        width:280px;
-        padding:0
-    }
-
-    .graph .bar{
-        display:block;
-        position:relative;
-        border:black 1px solid;
-        text-align:center;
-        color:#fff;
-        height:10px;
-        font-family:Arial,Helvetica,sans-serif;
-        font-size:12px;
-        line-height:1.9em
-    }
-
-    .graph .bar span{
-        position:absolute;
-        left:1em
-    }
-
-    td.coveredLine,
-    span.coveredLine
-    {
-        background-color: ${covered_color}!important;
-    }
-
-    td.uncoveredLine,
-    span.uncoveredLine
-    {
-        background-color: ${uncovered_color}!important;
-    }
-
-    .linecount
-    {
-        border-right: 1px gray solid;
-        background-color: lightgray;
-    }
-
-    .src
-    {
-        padding-left: 12px;
-    }
-
-    .srcHeader
-    {
-        font-family: monospace;
-        font-weight: bold;
-    }
-
-    pre
-    {
-        height : 15px;
-        margin-top: 0;
-        margin-bottom: 0;
-    }
-
-    .lineno
-    {
-        background-color: #EFE383;
-        border-right: 1px solid #BBB15F;
-    }
-''')
+""")
 
 #
 # A string template for the root HTML output
 #
-root_page = Template('''
+tpl_root = Template('''
 <html>
 
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
-  <title>${HEAD}</title>
-  <style media="screen" type="text/css">
-  ${CSS}
-  </style>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>${css}</style>
 </head>
 
 <body>
+<div class="gcovr">
 
-  <table width="100%" border=0 cellspacing=0 cellpadding=0>
-    <tr><td class="title">GCC Code Coverage Report</td></tr>
-    <tr><td class="hr"></td></tr>
+<div class="header">
 
-    <tr>
-      <td width="100%">
-        <table cellpadding=1 border=0 width="100%">
-          <tr>
-            <td width="10%" class="headerName">Directory:</td>
-            <td width="35%" class="headerValue">${DIRECTORY}</td>
-            <td width="5%"></td>
-            <td width="15%"></td>
-            <td width="10%" class="headerValue" style="text-align:right;">Exec</td>
-            <td width="10%" class="headerValue" style="text-align:right;">Total</td>
-            <td width="15%" class="headerValue" style="text-align:right;">Coverage</td>
-          </tr>
-          <tr>
-            <td class="headerName">Date:</td>
-            <td class="headerValue">${DATE}</td>
-            <td></td>
-            <td class="headerName">Lines:</td>
-            <td class="headerTableEntry">${LINES_EXEC}</td>
-            <td class="headerTableEntry">${LINES_TOTAL}</td>
-            <td class="headerTableEntry" style="background-color:${LINES_COLOR}">${LINES_COVERAGE} %</td>
-          </tr>
-          <tr>
-            <td class="headerName">Legend:</td>
-            <td class="headerValueLeg">
-              <span style="background-color:${low_color}">low: &lt; ${COVERAGE_MED} %</span>
-              <span style="background-color:${medium_color}">medium: &gt;= ${COVERAGE_MED} %</span>
-              <span style="background-color:${high_color}">high: &gt;= ${COVERAGE_HIGH} %</span>
-            </td>
-            <td></td>
-            <td class="headerName">Branches:</td>
-            <td class="headerTableEntry">${BRANCHES_EXEC}</td>
-            <td class="headerTableEntry">${BRANCHES_TOTAL}</td>
-            <td class="headerTableEntry" style="background-color:${BRANCHES_COLOR}">${BRANCHES_COVERAGE} %</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+  <h1 class="title">${title}</h1>
+  <span class="date">${date}</span>
 
-    <tr><td class="hr"></td></tr>
+  <table class="summary">
+    <colgroup>
+      <col width="25%">
+      <col width="25%">
+      <col width="25%">
+      <col width="25%">
+    </colgroup>
+
+    <thead>
+      <tr>
+        <th></th>
+        <th>Exec</th>
+        <th>Total</th>
+        <th>Coverage</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>Branches:</td>
+        <td>${branches_exec}</td>
+        <td>${branches_total}</td>
+        <td>${branches_coverage}</td>
+      </tr>
+
+      </tr>
+        <td>Lines:</td>
+        <td>${lines_exec}</td>
+        <td>${lines_total}</td>
+        <td>${lines_coverage}</td>
+      </tr>
+    </tbody>
   </table>
 
-  <center>
-  <table width="80%" cellpadding=1 cellspacing=1 border=0>
-    <tr>
-      <td width="44%"><br></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-    </tr>
-    <tr>
-      <td class="coverTableHead">File</td>
-      <td class="coverTableHead" colspan=3>Lines</td>
-      <td class="coverTableHead" colspan=2>Branches</td>
-    </tr>
+</div><!-- header -->
 
-    ${ROWS}
+<div class="body">
 
-    <tr>
-      <td width="44%"><br></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-      <td width="8%"></td>
-    </tr>
+  <table class="report">
+
+    <thead>
+      <tr>
+        <th>File</th>
+        <th colspan="3">Lines</th>
+        <th colspan="2">Branches</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      ${rows}
+    </tbody>
   </table>
-  </center>
 
-  <table width="100%" border=0 cellspacing=0 cellpadding=0>
-    <tr><td class="hr"><td></tr>
-    <tr><td class="footer">Generated by: <a href="http://gcovr.com">GCOVR (Version ${VERSION})</a></td></tr>
-  </table>
-  <br>
+</div><!-- body -->
 
+<div class="footer">
+  <div class="credits">
+    <a href="http://gcovr.com/"> Generated by GCOVR Version ${version}</a>
+  </div>
+</div><!-- footer -->
+
+</div><!-- gcovr -->
 </body>
-
 </html>
+''')
+
+tpl_row = Template('''
+      <tr>
+        <!-- Filename -->
+        <td class="file">${filename}</td>
+
+        <!-- Lines -->
+        <td class="lines graph">
+          <div style="width:${lines_coverage}%;"></div>
+        </td>
+
+        <td class="lines percent">${lines_coverage}&nbsp;%</td>
+        <td class="lines abs">
+          <span class="lines exec">${lines_exec}</span> /
+          <span class="lines total">${lines_total}</span>
+        </td>
+
+        <!-- Branches -->
+        <td class="branches percent">${branches_coverage}&nbsp;%</td>
+        <td class="branches abs">
+          <span class="branches exec">${branches_exec}</span> /
+          <span class="branches total">${branches_total}</span>
+        </td>
+      </tr>
 ''')
 
 #
 # A string template for the source file HTML output
 #
-source_page = Template('''
+tpl_src = Template('''
 <html>
 
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
-  <title>${HEAD}</title>
-  <style media="screen" type="text/css">
-  ${CSS}
-  </style>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>${css}</style>
 </head>
 
 <body>
+<div class="gcovr">
 
-  <table width="100%" border="0" cellspacing="0" cellpadding="0">
-    <tr><td class="title">GCC Code Coverage Report</td></tr>
-    <tr><td class="hr"></td></tr>
+<div class="header">
 
-    <tr>
-      <td width="100%">
-        <table cellpadding="1" border="0" width="100%">
-          <tr>
-            <td width="10%" class="headerName">Directory:</td>
-            <td width="35%" class="headerValue">${DIRECTORY}</td>
-            <td width="5%"></td>
-            <td width="15%"></td>
-            <td width="10%" class="headerValue" style="text-align:right;">Exec</td>
-            <td width="10%" class="headerValue" style="text-align:right;">Total</td>
-            <td width="15%" class="headerValue" style="text-align:right;">Coverage</td>
-          </tr>
-          <tr>
-            <td class="headerName">File:</td>
-            <td class="headerValue">${FILENAME}</td>
-            <td></td>
-            <td class="headerName">Lines:</td>
-            <td class="headerTableEntry">${LINES_EXEC}</td>
-            <td class="headerTableEntry">${LINES_TOTAL}</td>
-            <td class="headerTableEntry" style="background-color:${LINES_COLOR}">${LINES_COVERAGE} %</td>
-          </tr>
-          <tr>
-            <td class="headerName">Date:</td>
-            <td class="headerValue">${DATE}</td>
-            <td></td>
-            <td class="headerName">Branches:</td>
-            <td class="headerTableEntry">${BRANCHES_EXEC}</td>
-            <td class="headerTableEntry">${BRANCHES_TOTAL}</td>
-            <td class="headerTableEntry" style="background-color:${BRANCHES_COLOR}">${BRANCHES_COVERAGE} %</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+  <h1 class="title">${title}</h1>
+  <span class="date">${date}</span>
 
-    <tr><td class="hr"></td></tr>
+  <table class="summary">
+    <colgroup>
+      <col width="25%">
+      <col width="25%">
+      <col width="25%">
+      <col width="25%">
+    </colgroup>
+
+    <thead>
+      <tr>
+        <th></th>
+        <th>Exec</th>
+        <th>Total</th>
+        <th>Coverage</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>Branches:</td>
+        <td>${branches_exec}</td>
+        <td>${branches_total}</td>
+        <td>${branches_coverage}</td>
+      </tr>
+
+      </tr>
+        <td>Lines:</td>
+        <td>${lines_exec}</td>
+        <td>${lines_total}</td>
+        <td>${lines_coverage}</td>
+      </tr>
+    </tbody>
   </table>
 
-  <br>
-  <table cellspacing="0" cellpadding="1">
-    <tr>
-      <td width="5%" align="right" class="srcHeader">Line</td>
-      <td width="10%" align="right" class="srcHeader">Exec</td>
-      <td width="75%" align="left" class="srcHeader src">Source</td>
-    </tr>
+</div><!-- header -->
 
-    ${ROWS}
+<div class="body">
 
+  <table class="source">
+
+    <thead>
+      <tr>
+        <th>Line</th>
+        <th>Exec</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      ${rows}
+    </tbody>
   </table>
-  <br>
 
-  <table width="100%" border="0" cellspacing="0" cellpadding="0">
-    <tr><td class="hr"><td></tr>
-    <tr><td class="footer">Generated by: <a href="http://gcovr.com">GCOVR (Version ${VERSION})</a></td></tr>
-  </table>
-  <br>
+</div><!-- body -->
 
+<div class="footer">
+  <div class="credits">
+    <a href="http://gcovr.com/"> Generated by GCOVR Version ${version}</a>
+  </div>
+</div><!-- footer -->
+
+</div><!-- gcovr -->
 </body>
-
 </html>
 ''')
 
@@ -1380,38 +1177,18 @@ source_page = Template('''
 # Produce an HTML report
 #
 def print_html_report(covdata, options):
-    def _num_uncovered(key):
-        (total, covered, percent) = covdata[key].coverage()
-        return total - covered
-
-    def _percent_uncovered(key):
-        (total, covered, percent) = covdata[key].coverage()
-        if covered:
-            return -1.0 * covered / total
-        else:
-            return total or 1e6
-
-    def _alpha(key):
-        return key
 
     details = options.html_details
     if options.output is None:
         details = False
     data = {}
-    data['HEAD'] = "Head"
     data['VERSION'] = version_str()
     data['TIME'] = str(int(time.time()))
     data['DATE'] = datetime.date.today().isoformat()
     data['ROWS'] = []
-    data['low_color'] = low_color
-    data['medium_color'] = medium_color
-    data['high_color'] = high_color
     data['COVERAGE_MED'] = medium_coverage
     data['COVERAGE_HIGH'] = high_coverage
-    data['CSS'] = css.substitute(
-        low_color=low_color, medium_color=medium_color, high_color=high_color,
-        covered_color=covered_color, uncovered_color=uncovered_color
-    )
+    data['CSS'] = css
     data['DIRECTORY'] = ''
 
     branchTotal = 0
@@ -1426,12 +1203,6 @@ def print_html_report(covdata, options):
     coverage = 0.0 if branchTotal == 0 else \
         round(100.0 * branchCovered / branchTotal, 1)
     data['BRANCHES_COVERAGE'] = str(coverage)
-    if coverage < medium_coverage:
-        data['BRANCHES_COLOR'] = low_color
-    elif coverage < high_coverage:
-        data['BRANCHES_COLOR'] = medium_color
-    else:
-        data['BRANCHES_COLOR'] = high_color
 
     lineTotal = 0
     lineCovered = 0
@@ -1445,22 +1216,12 @@ def print_html_report(covdata, options):
     coverage = 0.0 if lineTotal == 0 else \
         round(100.0 * lineCovered / lineTotal, 1)
     data['LINES_COVERAGE'] = str(coverage)
-    if coverage < medium_coverage:
-        data['LINES_COLOR'] = low_color
-    elif coverage < high_coverage:
-        data['LINES_COLOR'] = medium_color
-    else:
-        data['LINES_COLOR'] = high_color
 
     # Generate the coverage output (on a per-package basis)
-    #source_dirs = set()
     files = []
     filtered_fname = ''
-    keys = list(covdata.keys())
-    keys.sort(
-        key=options.sort_uncovered and _num_uncovered or
-        options.sort_percent and _percent_uncovered or _alpha
-    )
+    keys = sort_keys(covdata, options)
+
     for f in keys:
         cdata = covdata[f]
         filtered_fname = options.root_filter.sub('', f)
@@ -1485,6 +1246,10 @@ def print_html_report(covdata, options):
         dir_, file_ = os.path.split(filtered_fname)
         if dir_ != '':
             data['DIRECTORY'] = dir_ + os.sep
+
+    # Generate rows
+    even = True
+    rows = []
 
     for f in keys:
         cdata = covdata[f]
@@ -1514,30 +1279,30 @@ def print_html_report(covdata, options):
         branches_covered = 100.0 if class_branches == 0 else \
             100.0 * class_branch_hits / class_branches
 
-        data['ROWS'].append(html_row(
-            details, cdata._sourcefile,
-            directory=data['DIRECTORY'],
-            filename=cdata._filename,
-            LinesExec=class_hits,
-            LinesTotal=class_lines,
-            LinesCoverage=lines_covered,
-            BranchesExec=class_branch_hits,
-            BranchesTotal=class_branches,
-            BranchesCoverage=branches_covered
+        # Update even
+        even = not even
+
+        rows.append(tpl_row.substitute(
+            even=even,
+            filename=cdata._sourcefile,
+            lines_coverage=lines_covered,
+            lines_exec=class_hits,
+            lines_total=class_lines,
+            branches_coverage=branches_covered,
+            branches_exec=class_branch_hits,
+            branches_total=class_branches
         ))
-    data['ROWS'] = '\n'.join(data['ROWS'])
 
-    if data['DIRECTORY'] == '':
-        data['DIRECTORY'] = "."
+    data['rows'] = '\n'.join(rows)
 
-    htmlString = root_page.substitute(**data)
+    html_str = tpl_root.substitute(**data)
 
     if options.output is None:
-        sys.stdout.write(htmlString + '\n')
+        sys.stdout.write(html_str)
+        sys.stdout.write('\n')
     else:
-        OUTPUT = open(options.output, 'w')
-        OUTPUT.write(htmlString + '\n')
-        OUTPUT.close()
+        with open(options.output, 'w') as out:
+            out.write(html_str)
 
     # Return, if no details are requested
     if not details:
@@ -1559,12 +1324,6 @@ def print_html_report(covdata, options):
         coverage = 0.0 if branchTotal == 0 else \
             round(100.0 * branchCovered / branchTotal, 1)
         data['BRANCHES_COVERAGE'] = str(coverage)
-        if coverage < medium_coverage:
-            data['BRANCHES_COLOR'] = low_color
-        elif coverage < high_coverage:
-            data['BRANCHES_COLOR'] = medium_color
-        else:
-            data['BRANCHES_COLOR'] = high_color
 
         options.show_branch = False
         lineTotal, lineCovered, tmp = cdata.coverage()
@@ -1573,12 +1332,6 @@ def print_html_report(covdata, options):
         coverage = 0.0 if lineTotal == 0 else \
             round(100.0 * lineCovered / lineTotal, 1)
         data['LINES_COVERAGE'] = str(coverage)
-        if coverage < medium_coverage:
-            data['LINES_COLOR'] = low_color
-        elif coverage < high_coverage:
-            data['LINES_COLOR'] = medium_color
-        else:
-            data['LINES_COLOR'] = high_color
 
         data['ROWS'] = []
         currdir = os.getcwd()
@@ -1594,7 +1347,7 @@ def print_html_report(covdata, options):
         os.chdir(currdir)
         data['ROWS'] = '\n'.join(data['ROWS'])
 
-        htmlString = source_page.substitute(**data)
+        htmlString = tpl_src.substitute(**data)
         OUTPUT = open(cdata._sourcefile, 'w')
         OUTPUT.write(htmlString + '\n')
         OUTPUT.close()
@@ -1604,7 +1357,9 @@ def source_row(lineno, source, cdata):
     rowstr = Template('''
     <tr>
     <td align="right" class="lineno"><pre>${lineno}</pre></td>
-    <td align="right" class="linecount ${covclass}"><pre>${linecount}</pre></td>
+    <td align="right" class="linecount ${covclass}">
+        <pre>${linecount}</pre>
+    </td>
     <td align="left" class="src ${covclass}"><pre>${source}</pre></td>
     </tr>''')
     kwargs = {}
@@ -1619,70 +1374,6 @@ def source_row(lineno, source, cdata):
         kwargs['covclass'] = ''
         kwargs['linecount'] = ''
     kwargs['source'] = html.escape(source)
-    return rowstr.substitute(**kwargs)
-
-#
-# Generate the table row for a single file
-#
-nrows = 0
-
-
-def html_row(details, sourcefile, **kwargs):
-    if options.relative_anchors:
-        sourcefile = os.path.basename(sourcefile)
-    rowstr = Template('''
-    <tr>
-      <td class="coverFile" ${altstyle}>${filename}</td>
-      <td class="coverBar" align="center" ${altstyle}>
-        <table border=0 cellspacing=0 cellpadding=1><tr><td class="coverBarOutline">
-                <div class="graph"><strong class="bar" style="width:${LinesCoverage}%; ${BarBorder}background-color:${LinesBar}"></strong></div>
-                </td></tr></table>
-      </td>
-      <td class="CoverValue" style="font-weight:bold; background-color:${LinesColor};">${LinesCoverage}&nbsp;%</td>
-      <td class="CoverValue" style="font-weight:bold; background-color:${LinesColor};">${LinesExec} / ${LinesTotal}</td>
-      <td class="CoverValue" style="background-color:${BranchesColor};">${BranchesCoverage}&nbsp;%</td>
-      <td class="CoverValue" style="background-color:${BranchesColor};">${BranchesExec} / ${BranchesTotal}</td>
-    </tr>
-''')
-    global nrows
-    nrows += 1
-    if nrows % 2 == 0:
-        kwargs['altstyle'] = 'style="background-color:LightSteelBlue"'
-    else:
-        kwargs['altstyle'] = ''
-    if details:
-        kwargs['filename'] = '<a href="%s">%s</a>' % (
-            sourcefile, kwargs['filename'][len(kwargs['directory']):]
-        )
-    else:
-        kwargs['filename'] = kwargs['filename'][len(kwargs['directory']):]
-    kwargs['LinesCoverage'] = round(kwargs['LinesCoverage'], 1)
-    # Disable the border if the bar is too short to see the color
-    if kwargs['LinesCoverage'] < 1e-7:
-        kwargs['BarBorder'] = "border:white; "
-    else:
-        kwargs['BarBorder'] = ""
-    if kwargs['LinesCoverage'] < medium_coverage:
-        kwargs['LinesColor'] = low_color
-        kwargs['LinesBar'] = 'red'
-    elif kwargs['LinesCoverage'] < high_coverage:
-        kwargs['LinesColor'] = medium_color
-        kwargs['LinesBar'] = 'yellow'
-    else:
-        kwargs['LinesColor'] = high_color
-        kwargs['LinesBar'] = 'green'
-
-    kwargs['BranchesCoverage'] = round(kwargs['BranchesCoverage'], 1)
-    if kwargs['BranchesCoverage'] < medium_coverage:
-        kwargs['BranchesColor'] = low_color
-        kwargs['BranchesBar'] = 'red'
-    elif kwargs['BranchesCoverage'] < high_coverage:
-        kwargs['BranchesColor'] = medium_color
-        kwargs['BranchesBar'] = 'yellow'
-    else:
-        kwargs['BranchesColor'] = high_color
-        kwargs['BranchesBar'] = 'green'
-
     return rowstr.substitute(**kwargs)
 
 
@@ -1910,14 +1601,14 @@ def parse_arguments():
     parser = OptionParser()
     parser.add_option(
         "--version",
-        help="Print the version number, then exit",
+        help="Print the version number, then exit.",
         action="store_true",
         dest="version",
         default=False
     )
     parser.add_option(
         "-v", "--verbose",
-        help="Print progress messages",
+        help="Print progress messages.",
         action="store_true",
         dest="verbose",
         default=False
@@ -1937,7 +1628,7 @@ def parse_arguments():
     )
     parser.add_option(
         "-o", "--output",
-        help="Print output to this filename",
+        help="Print output to this filename.",
         action="store",
         dest="output",
         default=None
@@ -1961,28 +1652,28 @@ def parse_arguments():
     )
     parser.add_option(
         "-f", "--filter",
-        help="Keep only the data files that match this regular expression",
+        help="Keep only the data files that match this regular expression.",
         action="append",
         dest="filter",
         default=[]
     )
     parser.add_option(
         "-e", "--exclude",
-        help="Exclude data files that match this regular expression",
+        help="Exclude data files that match this regular expression.",
         action="append",
         dest="exclude",
         default=[]
     )
     parser.add_option(
         "--gcov-filter",
-        help="Keep only gcov data files that match this regular expression",
+        help="Keep only gcov data files that match this regular expression.",
         action="store",
         dest="gcov_filter",
         default=None
     )
     parser.add_option(
         "--gcov-exclude",
-        help="Exclude gcov data files that match this regular expression",
+        help="Exclude gcov data files that match this regular expression.",
         action="append",
         dest="gcov_exclude",
         default=[]
@@ -2027,7 +1718,7 @@ def parse_arguments():
     parser.add_option(
         "--html-absolute-paths",
         help="Set the paths in the HTML report to be absolute instead "
-             "of relative",
+             "of relative.",
         action="store_false",
         dest="relative_anchors",
         default=True
@@ -2097,12 +1788,7 @@ def main(options, args):
 
     if options.version:
         sys.stdout.write(
-            "gcovr %s\n"
-            "\n"
-            "Copyright (2013) Sandia Corporation. Under the terms of Contract\n"
-            "DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government\n"
-            "retains certain rights in this software.\n"
-            % (version_str(), )
+            "gcovr %s\n" % (version_str(), )
         )
         sys.exit(0)
 
